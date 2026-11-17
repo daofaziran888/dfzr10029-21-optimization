@@ -23,7 +23,9 @@ class SchedulerService:
             end = (today + timedelta(days=3 - i)).isoformat()
             items.append({
                 "id": int(row.get("id", i + 1)),
-                "name": str(row.get(list(row.keys())[1] if len(row) > 1 else "name", "")),
+                "name": str(row.get("任务名称", "")),
+                "task_code": str(row.get("任务编号", "")),
+                "cadence": str(row.get("执行周期", "")),
                 "start": start,
                 "end": end,
                 "status": str(row.get("status", STATUS_ORDER[i % len(STATUS_ORDER)])),

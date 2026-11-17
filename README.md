@@ -75,5 +75,30 @@ npm run dev
 - 列表接口统一返回 `{ items, total, page, size }`，动作接口统一返回 `{ ok, message }`。
 - 状态流转只允许在 `app/services` 里改，路由层不做业务判断。
 
+## 任务调度：补跑窗口合并与状态推进
+
+针对离线恢复时同一任务连续触发多次补跑、后一次覆盖前一次、队列积压已完成周期的问题，
+调度模块在既有时间线之外增加了补跑窗口核对/合并链路（`app/services/catchup.py`，
+接口前缀 `/api/scheduler/catchup`）：
+
+1. **来源记录原样保留**：调度引擎、离线恢复、人工补录上报的错过窗口写入
+   `scheduler_missed_sources`，同一任务同一周期的重复上报不去重，作为核对输入。
+2. **核对与合并在同一推进边界内完成**：`POST /reconcile` 读取当前待核对来源，按
+   「来源优先级 → 最晚记录时间」裁决冲突，生成唯一核对条目并把相邻窗口合并为补跑批次；
+   一次提交只保留一份有效版本（`scheduler_catchup_versions.is_current`），旧版本转历史。
+3. **同一周期不重复执行**：已建批次（含已归档）和未归档执行记录覆盖的周期会被占用保护，
+   重复来源不会再生成批次；未归档执行记录中「任务+周期」唯一，重试复用原记录不复制。
+4. **状态推进与归档留痕**：批次 待补跑→补跑中→已完成/执行失败→已归档 的每次切换都写
+   `scheduler_catchup_events`，并同步执行记录（最终产物 `scheduler_executions`）与任务状态；
+   完成的周期立即离开积压队列（`GET /queue`）。
+5. **两种合并范围**：`merge_scope=task` 按任务分别合并，`group` 按依赖组整体合并
+   （组内窗口并集扩散到同组任务），两种方式产出不同的批次与队列长度，由同一唯一性约束兜底。
+6. **页面与导出**：调度页展示合并后的补跑批次、最终执行状态、来源记录与生命周期流水；
+   `GET /export/batches` 逐行列出被合并周期，`GET /export/executions` 导出执行记录。
+   `GET /integrity` 返回周期唯一性、有效版本唯一性等核对结果。
+
+后端核对脚本：`backend/tests/test_catchup_flow.py`；
+前端端到端：`frontend/tests/scheduler-catchup.spec.ts`。
+
 领域：数据工程
 子方向：数据分析与数据应用

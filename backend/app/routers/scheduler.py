@@ -18,10 +18,11 @@ STATUSES = ["待执行", "执行中", "已完成", "执行失败"]
 
 
 def csv_cell(value: Any) -> str:
+    """CSV 单元格：只做公式注入前缀转义，引号交给 csv.writer 统一处理。"""
     text = str(value) if value is not None else ""
     if text and text[0] in "=+-@":
-        text = "'" + text
-    return '"' + text.replace('"', '""') + '"'
+        return "'" + text
+    return text
 
 
 @router.get("")
